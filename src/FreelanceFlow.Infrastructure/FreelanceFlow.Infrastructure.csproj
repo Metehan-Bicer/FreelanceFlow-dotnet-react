@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreelanceFlow.Domain\FreelanceFlow.Domain.csproj" />
+    <ProjectReference Include="..\FreelanceFlow.Persistence\FreelanceFlow.Persistence.csproj" />
+    <ProjectReference Include="..\FreelanceFlow.Application\FreelanceFlow.Application.csproj" />
+    <ProjectReference Include="..\FreelanceFlow.Core\FreelanceFlow.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="itext7" Version="9.2.0" />
+    <PackageReference Include="MailKit" Version="4.13.0" />
+  </ItemGroup>
+
+</Project>
