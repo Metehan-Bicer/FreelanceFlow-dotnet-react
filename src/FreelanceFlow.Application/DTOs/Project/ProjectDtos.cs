@@ -15,6 +15,7 @@ public class ProjectDto
     public ProjectStatus Status { get; set; }
     public Priority Priority { get; set; }
     public int ProgressPercentage { get; set; }
+    public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
@@ -44,4 +45,9 @@ public class UpdateProjectDto
 public class UpdateProjectStatusDto
 {
     public ProjectStatus Status { get; set; }
+}
+
+public class UpdateProjectActiveStatusDto
+{
+    public bool IsActive { get; set; }
 }

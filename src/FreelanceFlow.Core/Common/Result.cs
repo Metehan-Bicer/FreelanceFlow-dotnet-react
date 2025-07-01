@@ -11,7 +11,9 @@ public class Result
         IsSuccess = isSuccess;
         Error = error;
         if (!string.IsNullOrEmpty(error))
+        {
             Errors.Add(error);
+        }
     }
 
     public static Result Success() => new(true);

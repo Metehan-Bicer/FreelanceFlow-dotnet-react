@@ -41,4 +41,11 @@ public class ClientRepository : BaseRepository<Client>, IClientRepository
             .OrderBy(c => c.Name)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<Project>> GetActiveProjectsByClientIdAsync(Guid clientId)
+    {
+        return await _context.Set<Project>()
+            .Where(p => p.ClientId == clientId && p.IsActive && !p.IsDeleted)
+            .ToListAsync();
+    }
 }

@@ -55,20 +55,30 @@ public class InvoiceService : IInvoiceService
 
     public async Task<Result<Guid>> CreateAsync(CreateInvoiceDto dto)
     {
-        // Check if client exists
+        // Check if client exists and is active
         var client = await _clientRepository.GetByIdAsync(dto.ClientId);
         if (client == null)
         {
             return Result<Guid>.Failure("Belirtilen müşteri bulunamadı.");
         }
 
-        // Check if project exists (if provided)
+        if (client.Status != FreelanceFlow.Domain.Enums.ClientStatus.Active)
+        {
+            return Result<Guid>.Failure("Pasif durumda olan müşteri için fatura oluşturulamaz.");
+        }
+
+        // Check if project exists and is active (if provided)
         if (dto.ProjectId.HasValue)
         {
             var project = await _projectRepository.GetByIdAsync(dto.ProjectId.Value);
             if (project == null)
             {
                 return Result<Guid>.Failure("Belirtilen proje bulunamadı.");
+            }
+
+            if (!project.IsActive)
+            {
+                return Result<Guid>.Failure("Pasif durumda olan proje için fatura oluşturulamaz.");
             }
         }
 
@@ -108,23 +118,18 @@ public class InvoiceService : IInvoiceService
 
     public async Task<Result<InvoiceDto>> UpdateAsync(Guid id, UpdateInvoiceDto dto)
     {
-        var invoice = await _invoiceRepository.GetByIdWithDetailsAsync(id);
-        
+        var invoice = await _invoiceRepository.GetByIdAsync(id);
         if (invoice == null)
         {
             return Result<InvoiceDto>.Failure("Fatura bulunamadı.");
         }
 
-        if (invoice.Status == InvoiceStatus.Paid)
-        {
-            return Result<InvoiceDto>.Failure("Ödenmiş faturalar güncellenemez.");
-        }
-
-        // Calculate new totals
+        // Calculate totals
         var subTotal = dto.Items.Sum(i => i.Quantity * i.UnitPrice);
         var taxAmount = subTotal * (dto.TaxRate / 100);
         var totalAmount = subTotal + taxAmount;
 
+        // Update invoice properties
         invoice.IssueDate = dto.IssueDate;
         invoice.DueDate = dto.DueDate;
         invoice.SubTotal = subTotal;
@@ -144,23 +149,21 @@ public class InvoiceService : IInvoiceService
         }).ToList();
 
         await _invoiceRepository.UpdateAsync(invoice);
-
-        var updatedInvoice = await _invoiceRepository.GetByIdWithDetailsAsync(id);
-        var invoiceDto = _mapper.Map<InvoiceDto>(updatedInvoice);
         
-        return Result<InvoiceDto>.Success(invoiceDto);
+        var updatedInvoiceDto = _mapper.Map<InvoiceDto>(invoice);
+        return Result<InvoiceDto>.Success(updatedInvoiceDto);
     }
 
     public async Task<Result<string>> DeleteAsync(Guid id)
     {
         var invoice = await _invoiceRepository.GetByIdAsync(id);
-        
         if (invoice == null)
         {
             return Result<string>.Failure("Fatura bulunamadı.");
         }
 
-        if (invoice.Status == InvoiceStatus.Paid)
+        // Check if invoice can be deleted (not paid)
+        if (invoice.PaymentStatus == PaymentStatus.Paid)
         {
             return Result<string>.Failure("Ödenmiş faturalar silinemez.");
         }
@@ -172,7 +175,6 @@ public class InvoiceService : IInvoiceService
     public async Task<Result<string>> UpdateStatusAsync(Guid id, InvoiceStatus status)
     {
         var invoice = await _invoiceRepository.GetByIdAsync(id);
-        
         if (invoice == null)
         {
             return Result<string>.Failure("Fatura bulunamadı.");
@@ -181,13 +183,12 @@ public class InvoiceService : IInvoiceService
         invoice.Status = status;
         await _invoiceRepository.UpdateAsync(invoice);
         
-        return Result<string>.Success("Fatura durumu güncellendi.");
+        return Result<string>.Success("Fatura durumu başarıyla güncellendi.");
     }
 
     public async Task<Result<string>> UpdatePaymentStatusAsync(Guid id, PaymentStatus paymentStatus, DateTime? paidAt)
     {
         var invoice = await _invoiceRepository.GetByIdAsync(id);
-        
         if (invoice == null)
         {
             return Result<string>.Failure("Fatura bulunamadı.");
@@ -197,58 +198,96 @@ public class InvoiceService : IInvoiceService
         if (paymentStatus == PaymentStatus.Paid && paidAt.HasValue)
         {
             invoice.PaidAt = paidAt.Value;
-            invoice.Status = InvoiceStatus.Paid;
         }
-
+        
         await _invoiceRepository.UpdateAsync(invoice);
         
-        return Result<string>.Success("Ödeme durumu güncellendi.");
+        return Result<string>.Success("Ödeme durumu başarıyla güncellendi.");
     }
 
     public async Task<Result<string>> SendInvoiceByEmailAsync(Guid id)
     {
-        var invoiceResult = await GetByIdAsync(id);
-        if (!invoiceResult.IsSuccess)
-        {
-            return Result<string>.Failure(invoiceResult.Error ?? "Fatura bulunamadı.");
-        }
-
-        var invoice = invoiceResult.Value;
+        var invoice = await _invoiceRepository.GetByIdWithDetailsAsync(id);
         if (invoice == null)
         {
             return Result<string>.Failure("Fatura bulunamadı.");
         }
+
+        try
+        {
+            // Generate PDF - Invoice entity'yi direkt geç
+            var pdfBytes = await _pdfService.GenerateInvoicePdfAsync(invoice);
+            
+            // Send email
+            var emailSent = await _emailService.SendInvoiceEmailAsync(
+                invoice.Client.Email,
+                invoice.Client.Name,
+                invoice.InvoiceNumber,
+                pdfBytes);
+
+            if (!emailSent)
+            {
+                return Result<string>.Failure("Fatura gönderilirken hata oluştu.");
+            }
+
+            // Update invoice status
+            invoice.Status = InvoiceStatus.Sent;
+            await _invoiceRepository.UpdateAsync(invoice);
+
+            return Result<string>.Success("Fatura başarıyla gönderildi.");
+        }
+        catch (Exception ex)
+        {
+            return Result<string>.Failure($"Fatura gönderilirken hata oluştu: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<IEnumerable<InvoiceDto>>> GetOverdueInvoicesAsync()
+    {
+        var overdueInvoices = await _invoiceRepository.GetOverdueInvoicesAsync();
+        var invoiceDtos = _mapper.Map<IEnumerable<InvoiceDto>>(overdueInvoices);
+        return Result<IEnumerable<InvoiceDto>>.Success(invoiceDtos);
+    }
+
+    public async Task<Result<bool>> MarkAsPaidAsync(Guid id, DateTime? paidDate = null)
+    {
+        var invoice = await _invoiceRepository.GetByIdAsync(id);
+        if (invoice == null)
+        {
+            return Result<bool>.Failure("Fatura bulunamadı.");
+        }
+
+        invoice.PaymentStatus = PaymentStatus.Paid;
+        invoice.PaidAt = paidDate ?? DateTime.UtcNow;
         
-        var client = await _clientRepository.GetByIdAsync(invoice.ClientId);
+        await _invoiceRepository.UpdateAsync(invoice);
+        return Result<bool>.Success(true);
+    }
+
+    public async Task<Result<bool>> MarkAsOverdueAsync(Guid id)
+    {
+        var invoice = await _invoiceRepository.GetByIdAsync(id);
+        if (invoice == null)
+        {
+            return Result<bool>.Failure("Fatura bulunamadı.");
+        }
+
+        invoice.PaymentStatus = PaymentStatus.Overdue;
         
-        if (client == null || string.IsNullOrEmpty(client.Email))
+        await _invoiceRepository.UpdateAsync(invoice);
+        return Result<bool>.Success(true);
+    }
+
+    public async Task<Result<byte[]>> GeneratePdfAsync(Guid id)
+    {
+        var invoice = await _invoiceRepository.GetByIdWithDetailsAsync(id);
+        if (invoice == null)
         {
-            return Result<string>.Failure("Müşteri email adresi bulunamadı.");
+            return Result<byte[]>.Failure("Fatura bulunamadı.");
         }
 
-        // Generate PDF
-        var pdfResult = await _pdfService.GenerateInvoicePdfAsync(invoice);
-        if (!pdfResult.IsSuccess)
-        {
-            return Result<string>.Failure(pdfResult.Error ?? "PDF oluşturulamadı.");
-        }
-
-        // Send email
-        var emailResult = await _emailService.SendInvoiceEmailAsync(client.Email, invoice, pdfResult.Value!);
-        if (!emailResult.IsSuccess)
-        {
-            return Result<string>.Failure(emailResult.Error ?? "Email gönderilemedi.");
-        }
-
-        // Update invoice status
-        var invoiceEntity = await _invoiceRepository.GetByIdAsync(id);
-        if (invoiceEntity != null && invoiceEntity.Status == InvoiceStatus.Draft)
-        {
-            invoiceEntity.Status = InvoiceStatus.Sent;
-            await _invoiceRepository.UpdateAsync(invoiceEntity);
-        }
-
-        return Result<string>.Success("Fatura email ile gönderildi.");
+        var pdfBytes = await _pdfService.GenerateInvoicePdfAsync(invoice);
+        return Result<byte[]>.Success(pdfBytes);
     }
 
     public async Task<Result<IEnumerable<InvoiceDto>>> GetByClientIdAsync(Guid clientId)
@@ -265,10 +304,22 @@ public class InvoiceService : IInvoiceService
         return Result<IEnumerable<InvoiceDto>>.Success(invoiceDtos);
     }
 
-    public async Task<Result<IEnumerable<InvoiceDto>>> GetOverdueInvoicesAsync()
+    public async Task<Result<InvoiceStatsDto>> GetInvoiceStatsAsync()
     {
-        var invoices = await _invoiceRepository.GetOverdueInvoicesAsync();
-        var invoiceDtos = _mapper.Map<IEnumerable<InvoiceDto>>(invoices);
-        return Result<IEnumerable<InvoiceDto>>.Success(invoiceDtos);
+        var allInvoices = await _invoiceRepository.GetAllAsync();
+        
+        var stats = new InvoiceStatsDto
+        {
+            TotalInvoices = allInvoices.Count(),
+            PaidInvoices = allInvoices.Count(i => i.PaymentStatus == PaymentStatus.Paid),
+            PendingInvoices = allInvoices.Count(i => i.PaymentStatus == PaymentStatus.Pending),
+            OverdueInvoices = allInvoices.Count(i => i.PaymentStatus == PaymentStatus.Overdue),
+            TotalAmount = allInvoices.Sum(i => i.TotalAmount),
+            PaidAmount = allInvoices.Where(i => i.PaymentStatus == PaymentStatus.Paid).Sum(i => i.TotalAmount),
+            PendingAmount = allInvoices.Where(i => i.PaymentStatus == PaymentStatus.Pending).Sum(i => i.TotalAmount),
+            OverdueAmount = allInvoices.Where(i => i.PaymentStatus == PaymentStatus.Overdue).Sum(i => i.TotalAmount)
+        };
+
+        return Result<InvoiceStatsDto>.Success(stats);
     }
 }

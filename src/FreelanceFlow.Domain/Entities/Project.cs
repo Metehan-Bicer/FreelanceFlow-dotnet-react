@@ -16,6 +16,7 @@ public class Project : BaseEntity
     public Priority Priority { get; set; } = Priority.Medium;
     public string? Notes { get; set; }
     public int ProgressPercentage { get; set; } = 0;
+    public bool IsActive { get; set; } = true; // Yeni projeler varsayılan olarak aktif
     
     // Navigation Properties
     public Client Client { get; set; } = null!;

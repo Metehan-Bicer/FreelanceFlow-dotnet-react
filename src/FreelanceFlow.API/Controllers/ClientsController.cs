@@ -200,4 +200,32 @@ public class ClientsController : ControllerBase
             return StatusCode(500, "Internal server error occurred");
         }
     }
+
+    /// <summary>
+    /// Update client status (Active/Inactive/Suspended)
+    /// </summary>
+    [HttpPut("{id}/status")]
+    public async Task<IActionResult> UpdateClientStatus(Guid id, [FromBody] UpdateClientStatusDto dto)
+    {
+        try
+        {
+            var result = await _clientService.UpdateClientStatusAsync(id, dto.Status);
+            
+            if (!result.IsSuccess)
+            {
+                return BadRequest(new { error = result.Error });
+            }
+
+            return Ok(new { 
+                success = true, 
+                data = result.Value,
+                message = "Müşteri durumu başarıyla güncellendi" 
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while updating client status");
+            return StatusCode(500, "Internal server error occurred");
+        }
+    }
 }

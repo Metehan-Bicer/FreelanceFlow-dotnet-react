@@ -13,4 +13,5 @@ public interface IProjectService
     Task<Result<string>> DeleteAsync(Guid id);
     Task<Result<IEnumerable<ProjectDto>>> GetByClientIdAsync(Guid clientId);
     Task<Result<string>> UpdateStatusAsync(Guid id, ProjectStatus status);
+    Task<Result<string>> UpdateProjectActiveStatusAsync(Guid id, bool isActive);
 }

@@ -8,4 +8,5 @@ public interface IClientRepository : IBaseRepository<Client>
     Task<Client?> GetByEmailAsync(string email);
     Task<IEnumerable<Client>> SearchByNameAsync(string name);
     Task<IEnumerable<Client>> GetClientsWithProjectsAsync();
+    Task<IEnumerable<Project>> GetActiveProjectsByClientIdAsync(Guid clientId);
 }

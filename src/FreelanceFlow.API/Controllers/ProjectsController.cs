@@ -59,9 +59,22 @@ public class ProjectsController : ControllerBase
             return BadRequest(new { error = result.Error });
         }
 
+        // Yeni oluşturulan projeyi detaylarıyla birlikte getir
+        var projectResult = await _projectService.GetByIdAsync(result.Value);
+        
+        if (!projectResult.IsSuccess)
+        {
+            // Fallback - sadece ID ile response döndür
+            return CreatedAtAction(nameof(GetById), new { id = result.Value }, new { 
+                success = true, 
+                data = new { id = result.Value }, 
+                message = "Proje başarıyla oluşturuldu" 
+            });
+        }
+
         return CreatedAtAction(nameof(GetById), new { id = result.Value }, new { 
             success = true, 
-            data = new { id = result.Value }, 
+            data = projectResult.Value, 
             message = "Proje başarıyla oluşturuldu" 
         });
     }
@@ -99,10 +112,40 @@ public class ProjectsController : ControllerBase
         });
     }
 
-    [HttpGet("client/{clientId}")]
-    public async Task<IActionResult> GetByClientId(Guid clientId)
+    /// <summary>
+    /// Get active projects only
+    /// </summary>
+    [HttpGet("active")]
+    public async Task<IActionResult> GetActiveProjects()
     {
-        var result = await _projectService.GetByClientIdAsync(clientId);
+        try
+        {
+            var allProjects = await _projectService.GetAllAsync();
+            if (!allProjects.IsSuccess)
+            {
+                return BadRequest(new { error = allProjects.Error });
+            }
+
+            var activeProjects = allProjects.Value.Where(p => p.IsActive);
+            
+            return Ok(new { 
+                success = true, 
+                data = activeProjects 
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Aktif projeler yüklenirken hata oluştu." });
+        }
+    }
+
+    /// <summary>
+    /// Update project active status
+    /// </summary>
+    [HttpPut("{id}/active-status")]
+    public async Task<IActionResult> UpdateProjectActiveStatus(Guid id, [FromBody] UpdateProjectActiveStatusDto dto)
+    {
+        var result = await _projectService.UpdateProjectActiveStatusAsync(id, dto.IsActive);
         
         if (!result.IsSuccess)
         {
@@ -111,7 +154,7 @@ public class ProjectsController : ControllerBase
 
         return Ok(new { 
             success = true, 
-            data = result.Value 
+            message = result.Value 
         });
     }
 }

@@ -199,15 +199,64 @@ public class InvoicesController : ControllerBase
             data = result.Value 
         });
     }
-}
 
-public class UpdateInvoiceStatusDto
-{
-    public InvoiceStatus Status { get; set; }
-}
+    [HttpGet("pending")]
+    public async Task<IActionResult> GetPendingInvoices()
+    {
+        var result = await _invoiceService.GetAllAsync();
+        
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.Error });
+        }
 
-public class UpdatePaymentStatusDto
-{
-    public PaymentStatus PaymentStatus { get; set; }
-    public DateTime? PaidAt { get; set; }
+        var pendingInvoices = result.Value.Where(i => i.PaymentStatus == PaymentStatus.Pending);
+
+        return Ok(new { 
+            success = true, 
+            data = pendingInvoices 
+        });
+    }
+
+    [HttpGet("{id}/pdf")]
+    public async Task<IActionResult> DownloadPdf(Guid id)
+    {
+        try
+        {
+            var result = await _invoiceService.GeneratePdfAsync(id);
+            
+            if (!result.IsSuccess)
+            {
+                return BadRequest(new { error = result.Error });
+            }
+
+            var invoice = await _invoiceService.GetByIdAsync(id);
+            if (!invoice.IsSuccess)
+            {
+                return BadRequest(new { error = "Fatura bulunamadı" });
+            }
+
+            return File(result.Value, "application/pdf", $"Fatura_{invoice.Value.InvoiceNumber}.pdf");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = $"PDF oluşturulurken hata oluştu: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("{id}/mark-paid")]
+    public async Task<IActionResult> MarkAsPaid(Guid id)
+    {
+        var result = await _invoiceService.UpdatePaymentStatusAsync(id, PaymentStatus.Paid, DateTime.UtcNow);
+        
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok(new { 
+            success = true, 
+            message = result.Value 
+        });
+    }
 }

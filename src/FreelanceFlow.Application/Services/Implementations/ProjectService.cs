@@ -43,19 +43,46 @@ public class ProjectService : IProjectService
 
     public async Task<Result<Guid>> CreateAsync(CreateProjectDto dto)
     {
-        // Check if client exists
-        var client = await _clientRepository.GetByIdAsync(dto.ClientId);
-        if (client == null)
+        try
         {
-            return Result<Guid>.Failure("Belirtilen müşteri bulunamadı.");
+            // Check if client exists
+            var client = await _clientRepository.GetByIdAsync(dto.ClientId);
+            if (client == null)
+            {
+                return Result<Guid>.Failure("Belirtilen müşteri bulunamadı.");
+            }
+
+            // Sadece aktif müşteriler için proje oluşturulabilir
+            if (client.Status != FreelanceFlow.Domain.Enums.ClientStatus.Active)
+            {
+                return Result<Guid>.Failure("Pasif durumda olan müşteri için proje oluşturulamaz. Önce müşteriyi aktif yapın.");
+            }
+
+            // Manuel olarak Project entity oluştur
+            var project = new Project
+            {
+                Id = Guid.NewGuid(),
+                Name = dto.Name,
+                Description = dto.Description,
+                ClientId = dto.ClientId,
+                StartDate = dto.StartDate,
+                DeadlineDate = dto.DeadlineDate,
+                Budget = dto.Budget,
+                Priority = dto.Priority,
+                Status = ProjectStatus.Planning,
+                ProgressPercentage = 0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            await _projectRepository.AddAsync(project);
+            return Result<Guid>.Success(project.Id);
         }
-
-        var project = _mapper.Map<Project>(dto);
-        project.Status = ProjectStatus.Planning;
-        project.ProgressPercentage = 0;
-
-        await _projectRepository.AddAsync(project);
-        return Result<Guid>.Success(project.Id);
+        catch (Exception ex)
+        {
+            return Result<Guid>.Failure($"Error creating project: {ex.Message}");
+        }
     }
 
     public async Task<Result<ProjectDto>> UpdateAsync(Guid id, UpdateProjectDto dto)
@@ -107,25 +134,52 @@ public class ProjectService : IProjectService
 
         project.Status = status;
         
-        // Auto-update progress based on status
+        // Auto-update progress and active status based on status
         switch (status)
         {
             case ProjectStatus.Planning:
                 project.ProgressPercentage = 0;
+                project.IsActive = true; // Planlama aşamasındaki projeler aktif
                 break;
             case ProjectStatus.InProgress:
                 if (project.ProgressPercentage == 0)
                     project.ProgressPercentage = 10;
+                project.IsActive = true; // Devam eden projeler aktif
+                break;
+            case ProjectStatus.OnHold:
+                project.IsActive = true; // Beklemedeki projeler aktif kalır (tekrar başlayabilir)
                 break;
             case ProjectStatus.Completed:
                 project.ProgressPercentage = 100;
+                project.IsActive = false; // Tamamlanan projeler pasif
                 break;
             case ProjectStatus.Cancelled:
-                // Keep current progress
+                project.IsActive = false; // İptal edilen projeler pasif
                 break;
         }
 
         await _projectRepository.UpdateAsync(project);
         return Result<string>.Success("Proje durumu güncellendi.");
+    }
+
+    public async Task<Result<string>> UpdateProjectActiveStatusAsync(Guid id, bool isActive)
+    {
+        var project = await _projectRepository.GetByIdAsync(id);
+        
+        if (project == null)
+        {
+            return Result<string>.Failure("Proje bulunamadı.");
+        }
+
+        // İş kuralları kontrolü
+        if (!isActive && (project.Status == ProjectStatus.InProgress || project.Status == ProjectStatus.Planning))
+        {
+            return Result<string>.Failure("Devam eden veya planlama aşamasındaki projeler pasif yapılamaz. Önce proje durumunu değiştirin.");
+        }
+
+        project.IsActive = isActive;
+        await _projectRepository.UpdateAsync(project);
+        
+        return Result<string>.Success($"Proje {(isActive ? "aktif" : "pasif")} duruma getirildi.");
     }
 }

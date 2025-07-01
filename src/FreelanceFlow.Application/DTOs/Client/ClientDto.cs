@@ -40,3 +40,8 @@ public class UpdateClientDto
     public ClientStatus Status { get; set; }
     public string? Notes { get; set; }
 }
+
+public class UpdateClientStatusDto
+{
+    public ClientStatus Status { get; set; }
+}

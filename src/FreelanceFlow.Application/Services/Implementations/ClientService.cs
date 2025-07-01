@@ -62,7 +62,22 @@ public class ClientService : IClientService
                 return Result<ClientDto>.Failure("A client with this email already exists");
             }
 
-            var client = _mapper.Map<Client>(createClientDto);
+            // Manuel olarak Client entity oluştur
+            var client = new Client
+            {
+                Id = Guid.NewGuid(),
+                Name = createClientDto.Name,
+                Email = createClientDto.Email,
+                Phone = createClientDto.Phone,
+                Company = createClientDto.Company,
+                Address = createClientDto.Address,
+                TaxNumber = createClientDto.TaxNumber,
+                Notes = createClientDto.Notes,
+                Status = FreelanceFlow.Domain.Enums.ClientStatus.Active,
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+            
             var createdClient = await _clientRepository.AddAsync(client);
             var clientDto = _mapper.Map<ClientDto>(createdClient);
 
@@ -172,6 +187,39 @@ public class ClientService : IClientService
         catch (Exception ex)
         {
             return Result<IEnumerable<ClientDto>>.Failure($"Error retrieving active clients: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ClientDto>> UpdateClientStatusAsync(Guid id, FreelanceFlow.Domain.Enums.ClientStatus status)
+    {
+        try
+        {
+            var client = await _clientRepository.GetByIdAsync(id);
+            if (client == null || client.IsDeleted)
+            {
+                return Result<ClientDto>.Failure("Client not found");
+            }
+
+            // İş kuralları kontrolü
+            if (status == FreelanceFlow.Domain.Enums.ClientStatus.Inactive)
+            {
+                // Aktif projeleri olan müşteri pasif yapılamaz
+                var activeProjects = await _clientRepository.GetActiveProjectsByClientIdAsync(id);
+                if (activeProjects.Any())
+                {
+                    return Result<ClientDto>.Failure("Bu müşterinin aktif projeleri bulunduğu için pasif yapılamaz. Önce projeleri tamamlayın veya iptal edin.");
+                }
+            }
+
+            client.Status = status;
+            await _clientRepository.UpdateAsync(client);
+            
+            var clientDto = _mapper.Map<ClientDto>(client);
+            return Result<ClientDto>.Success(clientDto);
+        }
+        catch (Exception ex)
+        {
+            return Result<ClientDto>.Failure($"Error updating client status: {ex.Message}");
         }
     }
 }

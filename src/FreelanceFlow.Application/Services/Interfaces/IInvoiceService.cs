@@ -17,4 +17,6 @@ public interface IInvoiceService
     Task<Result<IEnumerable<InvoiceDto>>> GetByClientIdAsync(Guid clientId);
     Task<Result<IEnumerable<InvoiceDto>>> GetByProjectIdAsync(Guid projectId);
     Task<Result<IEnumerable<InvoiceDto>>> GetOverdueInvoicesAsync();
+    Task<Result<InvoiceStatsDto>> GetInvoiceStatsAsync();
+    Task<Result<byte[]>> GeneratePdfAsync(Guid id);
 }

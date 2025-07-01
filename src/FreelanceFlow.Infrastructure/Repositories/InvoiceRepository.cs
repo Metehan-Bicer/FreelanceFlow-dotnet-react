@@ -102,28 +102,34 @@ public class InvoiceRepository : BaseRepository<Invoice>, IInvoiceRepository
 
     public async Task<decimal> GetTotalRevenueAsync()
     {
-        return await _dbSet
+        var paidInvoices = await _dbSet
             .Where(i => i.PaymentStatus == PaymentStatus.Paid && !i.IsDeleted)
-            .SumAsync(i => i.TotalAmount);
+            .ToListAsync();
+        
+        return paidInvoices.Sum(i => i.TotalAmount);
     }
 
     public async Task<decimal> GetMonthlyRevenueAsync(int year, int month)
     {
-        return await _dbSet
+        var monthlyInvoices = await _dbSet
             .Where(i => i.PaymentStatus == PaymentStatus.Paid && 
                        i.PaidAt.HasValue &&
                        i.PaidAt.Value.Year == year && 
                        i.PaidAt.Value.Month == month && 
                        !i.IsDeleted)
-            .SumAsync(i => i.TotalAmount);
+            .ToListAsync();
+        
+        return monthlyInvoices.Sum(i => i.TotalAmount);
     }
 
     public async Task<decimal> GetPendingPaymentsAsync()
     {
-        return await _dbSet
+        var pendingInvoices = await _dbSet
             .Where(i => i.PaymentStatus != PaymentStatus.Paid && 
                        i.Status != InvoiceStatus.Cancelled && 
                        !i.IsDeleted)
-            .SumAsync(i => i.TotalAmount);
+            .ToListAsync();
+        
+        return pendingInvoices.Sum(i => i.TotalAmount);
     }
 }

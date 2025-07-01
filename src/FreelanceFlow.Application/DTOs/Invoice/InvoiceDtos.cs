@@ -27,7 +27,7 @@ public class InvoiceItemDto
 {
     public Guid Id { get; set; }
     public string Description { get; set; } = string.Empty;
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal TotalPrice { get; set; }
 }
@@ -46,7 +46,7 @@ public class CreateInvoiceDto
 public class CreateInvoiceItemDto
 {
     public string Description { get; set; } = string.Empty;
-    public int Quantity { get; set; }
+    public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
 }
 
@@ -68,4 +68,16 @@ public class UpdatePaymentStatusDto
 {
     public PaymentStatus PaymentStatus { get; set; }
     public DateTime? PaidAt { get; set; }
+}
+
+public class InvoiceStatsDto
+{
+    public int TotalInvoices { get; set; }
+    public int PaidInvoices { get; set; }
+    public int PendingInvoices { get; set; }
+    public int OverdueInvoices { get; set; }
+    public decimal TotalAmount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal PendingAmount { get; set; }
+    public decimal OverdueAmount { get; set; }
 }

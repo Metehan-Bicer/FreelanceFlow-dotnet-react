@@ -15,7 +15,9 @@
 
   <ItemGroup>
     <PackageReference Include="itext7" Version="9.2.0" />
+    <PackageReference Include="itext7.bouncy-castle-adapter" Version="9.2.0" />
     <PackageReference Include="MailKit" Version="4.13.0" />
+    <PackageReference Include="QuestPDF" Version="2025.5.1" />
   </ItemGroup>
 
 </Project>

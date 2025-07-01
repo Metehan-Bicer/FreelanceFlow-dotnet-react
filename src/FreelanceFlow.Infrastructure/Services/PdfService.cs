@@ -1,120 +1,157 @@
-using iText.Kernel.Pdf;
-using iText.Layout;
-using iText.Layout.Element;
-using iText.Layout.Properties;
-using iText.Kernel.Colors;
-using iText.Layout.Borders;
-using FreelanceFlow.Application.DTOs.Invoice;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 using FreelanceFlow.Application.Services.Interfaces;
-using FreelanceFlow.Core.Common;
+using FreelanceFlow.Domain.Entities;
 
 namespace FreelanceFlow.Infrastructure.Services;
 
 public class PdfService : IPdfService
 {
-    public async Task<Result<byte[]>> GenerateInvoicePdfAsync(InvoiceDto invoice)
+    public async Task<byte[]> GenerateInvoicePdfAsync(Invoice invoice)
     {
-        try
+        // QuestPDF license (for development)
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var document = Document.Create(container =>
         {
-            using var stream = new MemoryStream();
-            using var writer = new PdfWriter(stream);
-            using var pdf = new PdfDocument(writer);
-            var document = new Document(pdf);
-
-            // Header
-            var header = new Paragraph("FATURA / INVOICE")
-                .SetTextAlignment(TextAlignment.CENTER)
-                .SetFontSize(20)
-                .SetMarginBottom(20);
-            document.Add(header);
-
-            // Company Info
-            var companyInfo = new Paragraph("FreelanceFlow")
-                .SetFontSize(16)
-                .SetMarginBottom(10);
-            document.Add(companyInfo);
-
-            // Invoice Details Table
-            var detailsTable = new Table(2).UseAllAvailableWidth();
-            
-            detailsTable.AddCell(new Cell().Add(new Paragraph("Fatura No:")));
-            detailsTable.AddCell(new Cell().Add(new Paragraph(invoice.InvoiceNumber)));
-            
-            detailsTable.AddCell(new Cell().Add(new Paragraph("Tarih:")));
-            detailsTable.AddCell(new Cell().Add(new Paragraph(invoice.IssueDate.ToString("dd.MM.yyyy"))));
-            
-            detailsTable.AddCell(new Cell().Add(new Paragraph("Vade Tarihi:")));
-            detailsTable.AddCell(new Cell().Add(new Paragraph(invoice.DueDate.ToString("dd.MM.yyyy"))));
-            
-            detailsTable.AddCell(new Cell().Add(new Paragraph("Müşteri:")));
-            detailsTable.AddCell(new Cell().Add(new Paragraph(invoice.ClientName)));
-
-            if (!string.IsNullOrEmpty(invoice.ProjectName))
+            container.Page(page =>
             {
-                detailsTable.AddCell(new Cell().Add(new Paragraph("Proje:")));
-                detailsTable.AddCell(new Cell().Add(new Paragraph(invoice.ProjectName)));
-            }
+                page.Size(PageSizes.A4);
+                page.Margin(2, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(11));
 
-            document.Add(detailsTable.SetMarginBottom(20));
+                page.Header()
+                    .Text($"FATURA #{invoice.InvoiceNumber}")
+                    .SemiBold().FontSize(20).FontColor(Colors.Blue.Medium);
 
-            // Items Table
-            var itemsTable = new Table(4).UseAllAvailableWidth();
-            
-            // Header
-            itemsTable.AddHeaderCell(new Cell().Add(new Paragraph("Açıklama")).SetBackgroundColor(ColorConstants.LIGHT_GRAY));
-            itemsTable.AddHeaderCell(new Cell().Add(new Paragraph("Miktar")).SetBackgroundColor(ColorConstants.LIGHT_GRAY));
-            itemsTable.AddHeaderCell(new Cell().Add(new Paragraph("Birim Fiyat")).SetBackgroundColor(ColorConstants.LIGHT_GRAY));
-            itemsTable.AddHeaderCell(new Cell().Add(new Paragraph("Toplam")).SetBackgroundColor(ColorConstants.LIGHT_GRAY));
+                page.Content()
+                    .PaddingVertical(1, Unit.Centimetre)
+                    .Column(x =>
+                    {
+                        // Firma Bilgileri
+                        x.Item().Text("FreelanceFlow").FontSize(24).SemiBold();
+                        x.Item().Text("Freelance Proje Yönetim Sistemi").FontSize(12);
+                        x.Item().PaddingTop(0.5f, Unit.Centimetre);
 
-            // Items
-            foreach (var item in invoice.Items)
-            {
-                itemsTable.AddCell(new Cell().Add(new Paragraph(item.Description)));
-                itemsTable.AddCell(new Cell().Add(new Paragraph(item.Quantity.ToString())));
-                itemsTable.AddCell(new Cell().Add(new Paragraph(item.UnitPrice.ToString("C", new System.Globalization.CultureInfo("tr-TR")))));
-                itemsTable.AddCell(new Cell().Add(new Paragraph(item.TotalPrice.ToString("C", new System.Globalization.CultureInfo("tr-TR")))));
-            }
+                        // Müşteri Bilgileri
+                        x.Item().Row(row =>
+                        {
+                            row.RelativeItem().Column(col =>
+                            {
+                                col.Item().Text("Fatura Bilgileri:").SemiBold();
+                                col.Item().Text($"Fatura No: {invoice.InvoiceNumber}");
+                                col.Item().Text($"Tarih: {invoice.IssueDate:dd.MM.yyyy}");
+                                col.Item().Text($"Vade: {invoice.DueDate:dd.MM.yyyy}");
+                            });
 
-            document.Add(itemsTable.SetMarginBottom(20));
+                            row.RelativeItem().Column(col =>
+                            {
+                                col.Item().Text("Müşteri:").SemiBold();
+                                col.Item().Text(invoice.Client?.Name ?? "Müşteri Adı");
+                                if (!string.IsNullOrEmpty(invoice.Client?.Email))
+                                    col.Item().Text($"E-posta: {invoice.Client.Email}");
+                                if (!string.IsNullOrEmpty(invoice.Client?.Phone))
+                                    col.Item().Text($"Telefon: {invoice.Client.Phone}");
+                            });
+                        });
 
-            // Totals Table
-            var totalsTable = new Table(2).UseAllAvailableWidth();
-            totalsTable.SetWidth(300).SetHorizontalAlignment(HorizontalAlignment.RIGHT);
+                        x.Item().PaddingTop(1, Unit.Centimetre);
 
-            totalsTable.AddCell(new Cell().Add(new Paragraph("Ara Toplam:")).SetBorder(Border.NO_BORDER));
-            totalsTable.AddCell(new Cell().Add(new Paragraph(invoice.SubTotal.ToString("C", new System.Globalization.CultureInfo("tr-TR")))).SetBorder(Border.NO_BORDER));
+                        // Proje Bilgisi (varsa)
+                        if (invoice.Project != null)
+                        {
+                            x.Item().Text($"Proje: {invoice.Project.Name}").SemiBold();
+                            x.Item().PaddingBottom(0.5f, Unit.Centimetre);
+                        }
 
-            totalsTable.AddCell(new Cell().Add(new Paragraph("KDV:")).SetBorder(Border.NO_BORDER));
-            totalsTable.AddCell(new Cell().Add(new Paragraph(invoice.TaxAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR")))).SetBorder(Border.NO_BORDER));
+                        // Fatura Kalemleri Tablosu
+                        x.Item().Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.RelativeColumn(3); // Açıklama
+                                columns.RelativeColumn(1); // Miktar
+                                columns.RelativeColumn(1); // Birim Fiyat
+                                columns.RelativeColumn(1); // Toplam
+                            });
 
-            totalsTable.AddCell(new Cell().Add(new Paragraph("TOPLAM:").SetFontSize(14)).SetBorder(Border.NO_BORDER));
-            totalsTable.AddCell(new Cell().Add(new Paragraph(invoice.TotalAmount.ToString("C", new System.Globalization.CultureInfo("tr-TR"))).SetFontSize(14)).SetBorder(Border.NO_BORDER));
+                            // Tablo Başlığı
+                            table.Header(header =>
+                            {
+                                header.Cell().Element(CellStyle).Text("Açıklama").SemiBold();
+                                header.Cell().Element(CellStyle).Text("Miktar").SemiBold();
+                                header.Cell().Element(CellStyle).Text("Birim Fiyat").SemiBold();
+                                header.Cell().Element(CellStyle).Text("Toplam").SemiBold();
 
-            document.Add(totalsTable);
+                                static IContainer CellStyle(IContainer container)
+                                {
+                                    return container.DefaultTextStyle(x => x.SemiBold()).PaddingVertical(5).BorderBottom(1).BorderColor(Colors.Black);
+                                }
+                            });
 
-            // Notes
-            if (!string.IsNullOrEmpty(invoice.Notes))
-            {
-                document.Add(new Paragraph("Notlar:")
-                    .SetMarginTop(20)
-                    .SetMarginBottom(10));
-                document.Add(new Paragraph(invoice.Notes));
-            }
+                            // Fatura Kalemleri
+                            foreach (var item in invoice.Items)
+                            {
+                                table.Cell().Element(CellStyle).Text(item.Description);
+                                table.Cell().Element(CellStyle).Text($"{item.Quantity:N2}");
+                                table.Cell().Element(CellStyle).Text($"{item.UnitPrice:N2} ₺");
+                                table.Cell().Element(CellStyle).Text($"{item.TotalPrice:N2} ₺");
 
-            // Footer
-            document.Add(new Paragraph("Bu fatura FreelanceFlow sistemi tarafından otomatik olarak oluşturulmuştur.")
-                .SetTextAlignment(TextAlignment.CENTER)
-                .SetFontSize(10)
-                .SetMarginTop(30)
-                .SetFontColor(ColorConstants.GRAY));
+                                static IContainer CellStyle(IContainer container)
+                                {
+                                    return container.BorderBottom(1).BorderColor(Colors.Grey.Lighten2).PaddingVertical(5);
+                                }
+                            }
+                        });
 
-            document.Close();
+                        x.Item().PaddingTop(1, Unit.Centimetre);
 
-            return await Task.FromResult(Result<byte[]>.Success(stream.ToArray()));
-        }
-        catch (Exception ex)
-        {
-            return Result<byte[]>.Failure($"PDF oluşturulurken hata oluştu: {ex.Message}");
-        }
+                        // Toplam Hesaplamalar
+                        x.Item().AlignRight().Column(totals =>
+                        {
+                            totals.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("Ara Toplam:");
+                                row.ConstantItem(100).Text($"{invoice.SubTotal:N2} ₺").AlignRight();
+                            });
+
+                            totals.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("KDV:");
+                                row.ConstantItem(100).Text($"{invoice.TaxAmount:N2} ₺").AlignRight();
+                            });
+
+                            totals.Item().BorderTop(1).BorderColor(Colors.Black).PaddingTop(5).Row(row =>
+                            {
+                                row.RelativeItem().Text("GENEL TOPLAM:").SemiBold().FontSize(14);
+                                row.ConstantItem(100).Text($"{invoice.TotalAmount:N2} ₺").SemiBold().FontSize(14).AlignRight();
+                            });
+                        });
+
+                        // Notlar
+                        if (!string.IsNullOrEmpty(invoice.Notes))
+                        {
+                            x.Item().PaddingTop(1, Unit.Centimetre).Column(notes =>
+                            {
+                                notes.Item().Text("Notlar:").SemiBold();
+                                notes.Item().Text(invoice.Notes);
+                            });
+                        }
+                    });
+
+                page.Footer()
+                    .AlignCenter()
+                    .Text(x =>
+                    {
+                        x.Span("Sayfa ");
+                        x.CurrentPageNumber();
+                        x.Span(" / ");
+                        x.TotalPages();
+                    });
+            });
+        });
+
+        return await Task.FromResult(document.GeneratePdf());
     }
 }
