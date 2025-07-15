@@ -42,7 +42,11 @@ public class AuthService : IAuthService
         }
 
         var token = GenerateJwtToken(user);
-        var expiryMinutes = int.Parse(_configuration["JwtSettings:ExpiryMinutes"]);
+        var expiryMinutesStr = _configuration["JwtSettings:ExpiryMinutes"];
+        if (string.IsNullOrEmpty(expiryMinutesStr) || !int.TryParse(expiryMinutesStr, out var expiryMinutes))
+        {
+            expiryMinutes = 60; // Default 60 minutes
+        }
 
         user.LastLoginAt = DateTime.UtcNow;
         await _userRepository.UpdateAsync(user);
@@ -118,8 +122,20 @@ public class AuthService : IAuthService
     private string GenerateJwtToken(User user)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");
-        var secretKey = Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]);
-        var expiryMinutes = int.Parse(jwtSettings["ExpiryMinutes"]);
+        var secretKeyStr = jwtSettings["SecretKey"];
+        var expiryMinutesStr = jwtSettings["ExpiryMinutes"];
+        
+        if (string.IsNullOrEmpty(secretKeyStr))
+        {
+            throw new InvalidOperationException("JWT SecretKey configuration is missing");
+        }
+        
+        if (string.IsNullOrEmpty(expiryMinutesStr) || !int.TryParse(expiryMinutesStr, out var expiryMinutes))
+        {
+            expiryMinutes = 60; // Default 60 minutes
+        }
+
+        var secretKey = Encoding.UTF8.GetBytes(secretKeyStr);
 
         var claims = new[]
         {

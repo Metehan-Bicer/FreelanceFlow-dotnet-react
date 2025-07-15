@@ -28,24 +28,12 @@ export class InvoiceService {
   }
 
   async markAsPaid(id: string): Promise<ApiResponse<string>> {
-    return await apiClient.put<string>(`/invoices/${id}/payment-status`, { 
-      paymentStatus: 2, // Paid = 2 (backend enum değeri)
-      paidAt: new Date().toISOString()
-    });
+    return await apiClient.post<string>(`/invoices/${id}/mark-paid`, {});
   }
 
   async updatePaymentStatus(id: string, status: 'Pending' | 'Paid' | 'PartiallyPaid' | 'Overdue' | 'Cancelled', paidAt?: string): Promise<ApiResponse<string>> {
-    // String değerleri backend enum integer değerlerine çevir
-    const statusMap = {
-      'Pending': 1,
-      'Paid': 2,
-      'PartiallyPaid': 3,
-      'Overdue': 4,
-      'Cancelled': 5
-    };
-
     return await apiClient.put<string>(`/invoices/${id}/payment-status`, { 
-      paymentStatus: statusMap[status],
+      paymentStatus: status,
       paidAt: paidAt || (status === 'Paid' ? new Date().toISOString() : null)
     });
   }

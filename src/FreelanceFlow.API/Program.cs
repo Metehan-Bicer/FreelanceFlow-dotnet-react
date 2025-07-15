@@ -59,7 +59,14 @@ builder.Services.AddDbContext<FreelanceFlowDbContext>(options =>
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]);
+var secretKeyStr = jwtSettings["SecretKey"];
+
+if (string.IsNullOrEmpty(secretKeyStr))
+{
+    throw new InvalidOperationException("JWT SecretKey configuration is missing");
+}
+
+var secretKey = Encoding.UTF8.GetBytes(secretKeyStr);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

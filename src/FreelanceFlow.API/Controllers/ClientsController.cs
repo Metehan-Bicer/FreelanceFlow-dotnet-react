@@ -30,15 +30,15 @@ public class ClientsController : ControllerBase
             
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Errors);
+                return BadRequest(new { success = false, error = result.Error });
             }
 
-            return Ok(result.Value);
+            return Ok(new { success = true, data = result.Value });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while fetching clients");
-            return StatusCode(500, "Internal server error occurred");
+            return StatusCode(500, new { success = false, error = "Internal server error occurred" });
         }
     }
 
@@ -54,15 +54,15 @@ public class ClientsController : ControllerBase
             
             if (!result.IsSuccess)
             {
-                return NotFound(result.Error);
+                return NotFound(new { success = false, error = result.Error });
             }
 
-            return Ok(result.Value);
+            return Ok(new { success = true, data = result.Value });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while fetching client {ClientId}", id);
-            return StatusCode(500, "Internal server error occurred");
+            return StatusCode(500, new { success = false, error = "Internal server error occurred" });
         }
     }
 
@@ -76,22 +76,23 @@ public class ClientsController : ControllerBase
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return BadRequest(new { success = false, error = "Geçersiz veri" });
             }
 
             var result = await _clientService.CreateClientAsync(createClientDto);
             
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Errors);
+                return BadRequest(new { success = false, error = result.Error });
             }
 
-            return CreatedAtAction(nameof(GetClient), new { id = result.Value!.Id }, result.Value);
+            return CreatedAtAction(nameof(GetClient), new { id = result.Value!.Id }, 
+                new { success = true, data = new { id = result.Value!.Id }, message = "Müşteri başarıyla oluşturuldu" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while creating client");
-            return StatusCode(500, "Internal server error occurred");
+            return StatusCode(500, new { success = false, error = "Internal server error occurred" });
         }
     }
 
@@ -105,22 +106,22 @@ public class ClientsController : ControllerBase
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return BadRequest(new { success = false, error = "Geçersiz veri" });
             }
 
             var result = await _clientService.UpdateClientAsync(id, updateClientDto);
             
             if (!result.IsSuccess)
             {
-                return NotFound(result.Error);
+                return NotFound(new { success = false, error = result.Error });
             }
 
-            return Ok(result.Value);
+            return Ok(new { success = true, data = result.Value, message = "Müşteri başarıyla güncellendi" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while updating client {ClientId}", id);
-            return StatusCode(500, "Internal server error occurred");
+            return StatusCode(500, new { success = false, error = "Internal server error occurred" });
         }
     }
 
@@ -136,15 +137,15 @@ public class ClientsController : ControllerBase
             
             if (!result.IsSuccess)
             {
-                return NotFound(result.Error);
+                return NotFound(new { success = false, error = result.Error });
             }
 
-            return NoContent();
+            return Ok(new { success = true, message = "Müşteri başarıyla silindi" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while deleting client {ClientId}", id);
-            return StatusCode(500, "Internal server error occurred");
+            return StatusCode(500, new { success = false, error = "Internal server error occurred" });
         }
     }
 
@@ -158,22 +159,22 @@ public class ClientsController : ControllerBase
         {
             if (string.IsNullOrWhiteSpace(name))
             {
-                return BadRequest("Search name cannot be empty");
+                return BadRequest(new { success = false, error = "Search name cannot be empty" });
             }
 
             var result = await _clientService.SearchClientsByNameAsync(name);
             
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Error);
+                return BadRequest(new { success = false, error = result.Error });
             }
 
-            return Ok(result.Value);
+            return Ok(new { success = true, data = result.Value });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while searching clients with name {Name}", name);
-            return StatusCode(500, "Internal server error occurred");
+            return StatusCode(500, new { success = false, error = "Internal server error occurred" });
         }
     }
 
@@ -189,15 +190,15 @@ public class ClientsController : ControllerBase
             
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Error);
+                return BadRequest(new { success = false, error = result.Error });
             }
 
-            return Ok(result.Value);
+            return Ok(new { success = true, data = result.Value });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred while fetching active clients");
-            return StatusCode(500, "Internal server error occurred");
+            return StatusCode(500, new { success = false, error = "Internal server error occurred" });
         }
     }
 

@@ -210,6 +210,14 @@ public class InvoicesController : ControllerBase
             return BadRequest(new { error = result.Error });
         }
 
+        if (result.Value == null)
+        {
+            return Ok(new { 
+                success = true, 
+                data = new List<object>() 
+            });
+        }
+
         var pendingInvoices = result.Value.Where(i => i.PaymentStatus == PaymentStatus.Pending);
 
         return Ok(new { 
@@ -225,13 +233,13 @@ public class InvoicesController : ControllerBase
         {
             var result = await _invoiceService.GeneratePdfAsync(id);
             
-            if (!result.IsSuccess)
+            if (!result.IsSuccess || result.Value == null)
             {
-                return BadRequest(new { error = result.Error });
+                return BadRequest(new { error = result.Error ?? "PDF oluşturulamadı" });
             }
 
             var invoice = await _invoiceService.GetByIdAsync(id);
-            if (!invoice.IsSuccess)
+            if (!invoice.IsSuccess || invoice.Value == null)
             {
                 return BadRequest(new { error = "Fatura bulunamadı" });
             }

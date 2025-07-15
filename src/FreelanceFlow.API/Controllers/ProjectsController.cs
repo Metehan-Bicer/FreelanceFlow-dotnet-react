@@ -126,6 +126,14 @@ public class ProjectsController : ControllerBase
                 return BadRequest(new { error = allProjects.Error });
             }
 
+            if (allProjects.Value == null)
+            {
+                return Ok(new { 
+                    success = true, 
+                    data = new List<object>() 
+                });
+            }
+
             var activeProjects = allProjects.Value.Where(p => p.IsActive);
             
             return Ok(new { 
@@ -133,7 +141,7 @@ public class ProjectsController : ControllerBase
                 data = activeProjects 
             });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(500, new { error = "Aktif projeler yüklenirken hata oluştu." });
         }
